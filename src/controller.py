@@ -6,6 +6,7 @@ import sys, time
 import numpy as np
 # Ros libraries
 import rospy
+import tf
  
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
@@ -23,21 +24,67 @@ class ctr:
         print "attaching to ROS"
         self.pub = rospy.Publisher('sim_p3at/cmd_vel', Twist, queue_size=10)
         self.subscriber = rospy.Subscriber("sim_p3at/odom", Odometry, self.callback)
-        self.speed = 0.4
+        self.speed = 0.8
+        self.last = 0.0
+        self.int = 0
+        self.last_e = 0
  
     def callback(self,data):
         self.loop(data)
  
     def loop(self,data):
-        rospy.loginfo("position %f,%f",data.pose.pose.position.x, data.pose.pose.position.y)
-        twist = Twist()
-        if data.pose.pose.position.x > 5:
-            self.speed = -0.4
-        elif data.pose.pose.position.x < -5:
-            self.speed = 0.4
+        # get dt
+        time = data.header.stamp.secs + data.header.stamp.nsecs / 1000000000.0
+        dt = time - self.last
+        if dt > 10:
+            dt = 0
+        self.last = time
 
+        quaternion = (data.pose.pose.orientation.x, data.pose.pose.orientation.y, data.pose.pose.orientation.z, data.pose.pose.orientation.w)
+        euler = tf.transformations.euler_from_quaternion(quaternion)
+        twist = Twist()
+
+        # speed controller
+#        if data.pose.pose.position.x > 5:
+#            self.speed = -0.8
+#            self.int = 0
+#        elif data.pose.pose.position.x < -5:
+#            self.speed = 0.8
+#            self.int = 0
+
+        #yaw controller
+        yaw = euler[2]
+        factor = 1;
+        if self.speed < 0:
+            factor = -1
+        
+        e = 0 - yaw
+        e =  data.pose.pose.position.y
+        Kp = 0.2
+        Ki = 0.2
+        Kd = 0
+
+        self.int = self.int + e * dt
+
+        # anti-windup
+        if self.int > 0.4 :
+            self.int = 0.4
+        if self.int < -0.4:
+            self.int = -0.4
+
+        dev = (e - self.last_e) / dt
+        u = Kp * e + Ki * self.int + Kd * dev
+
+        if u > 1 :
+            u = 1
+        if u < -1:
+            u = -1
+        
+        self.last_e = e
+
+        rospy.loginfo("position %f,%f yaw %f, dt %f, u %f",data.pose.pose.position.x, data.pose.pose.position.y, euler[2], dt, u)
         twist.linear.x = self.speed
-        twist.angular.z = 0
+        twist.angular.z = -1.0 * u
         self.pub.publish(twist)
  
  
