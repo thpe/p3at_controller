@@ -1,7 +1,12 @@
+Install additional packages:
+```
+sudo aptitude install ros-kinetic-robot-pose-ekf
+```
 Setup the workspace:
 ```
 mkdir -p ws/src
 cd ws/src
+source /opt/ros/kinetic/setup.zsh
 catkin_init_workspace
 git clone https://github.com/thpe/amr-ros-config
 git clone https://github.com/thpe/p3at_controller
